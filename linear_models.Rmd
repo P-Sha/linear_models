@@ -44,7 +44,8 @@ nyc_airbnb =
   select(price, stars, borough, neighborhood, room_type)
 ```
 
-## Fit a model (checking how the price of airbnb rental is related to stars, the borough it is in)
+## Fit a model 
+(checking how the price of airbnb rental is related to stars, the borough it is in)
 
 ```{r}
 # doing a visual ck on relationships:
@@ -110,7 +111,7 @@ nyc_airbnb %>%
 # now ordered in terms of obs, Manhattan has most obs, followed by Brooklyn, etc.
 ```
 
-Look at tht linear model again
+Look at that linear model again
 
 ```{r}
 fit = lm(price ~ stars + borough, data = nyc_airbnb) 
@@ -120,9 +121,58 @@ broom::tidy(fit)  #similar result as in line 59, reference category changed thou
 
 ## Diagnostics
 
+```{r}
+#residuals(fit)   :gives a long list of all residuals! takes too much space, 
+#instead, modelr package adds a column of residuals to the table of dataset.
+
+modelr::add_residuals(nyc_airbnb, fit) %>%   #input source of data, model used.
+  ggplot(aes(x = borough, y = resid)) + #plot residuals vs borough
+  geom_violin() +
+#gives distribution of residuals in each borough. Except Bronx, all have high resids
+  ylim(-500, 1500)   #limiting y-values ro eliminate extreme residuals.
+
+```
+OR  (same as above, + plot residuals against "stars (predictors)")
+```{r}
+nyc_airbnb %>% 
+modelr::add_residuals(fit) %>%   
+  ggplot(aes(x = borough, y = resid)) + 
+  geom_violin() +
+  ylim(-500, 1500) 
+
+nyc_airbnb %>% 
+  modelr::add_residuals(fit) %>% 
+# filter(resid > 5000) %>%      # could do this to check at high-value outlier resids
+  ggplot(aes(x = stars, y = resid)) +
+  geom_point() +
+  facet_wrap(. ~borough)   #facet plots by borough
+  
+```
 
 
+## Hypothesis tests
 
+This odes t-test by default
+
+```{r}
+fit %>% 
+  broom::tidy()  # r does hypothesis test in the background, giving stats & p-values
+```
+
+What about the significance of `borough` (all 3 boroughs coefficients at the same time),
+F-test(ANOVA) is done (good for multiple comparisons, as compared to doing many t-tests)
+
+```{r}
+fit_null = lm(price ~ stars, data = nyc_airbnb) #fit null model of price against stars.
+#Null hypothesis: Borough is unassociated with price.
+
+fit_alt = lm(price ~ stars + borough, data = nyc_airbnb)  # alternative model
+
+anova(fit_null, fit_alt) %>%  #use anova to compare models
+  broom::tidy()        # tidy the output 
+
+
+```
 
 
 
