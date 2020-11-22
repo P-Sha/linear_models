@@ -1,0 +1,128 @@
+---
+title: "Linear models"
+author: Purnima Sharma
+date: Nov 21, 2020
+output: github_document
+    
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(p8105.datasets)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+set.seed(1)
+```
+
+## Import data
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb %>% 
+  mutate(stars = review_scores_location / 2) %>%  #recoding stars var as review scores
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood) %>%   # renaming these two
+  filter(borough != "Staten Island") %>%  # filter out SI since not too many obs
+  select(price, stars, borough, neighborhood, room_type)
+```
+
+## Fit a model (checking how the price of airbnb rental is related to stars, the borough it is in)
+
+```{r}
+# doing a visual ck on relationships:
+nyc_airbnb %>% 
+  ggplot(aes(x = stars, y = price, color = borough)) +
+  geom_point()
+```
+
+## Let's fit the model we care about 
+Want to fit a line that runs through "stars", and maybe different for each borough(categorical predictor).
+
+```{r}
+fit = lm(price ~ stars + borough, data = nyc_airbnb)
+```
+
+Let's look at the results (these ways not much used).
+
+```{r, include = FALSE}
+# include = FALSE because don't want to include these long lists of outputs.
+
+fit      # gives coefficients
+
+summary(fit)   # gives lots more info
+summary(fit)$coef  #gives just the coefficients (output is a matrix), or
+coef(fit)          #this gives coefficients also, a vector without std.errors n p-values
+
+fitted(fit)  # to get all the fitted values from the model
+residuals(fit) #to get all the residuals
+```
+
+Let's look at the results better...more organized
+
+```{r}
+broom::glance(fit)  # gives all useful one-number summaries, as a tibble
+
+broom::tidy(fit) %>%  #output a tibble, with all coefficients(description in google doc)
+  select(-std.error, -statistic) %>%  #don't need these
+  mutate(
+    term = str_replace(term, "borough", "Borough: ")  #anywhere there is "borough" word,replace with"Borough: "[capital B with a colon and a space], in the var "term".
+  ) %>% 
+  knitr::kable(digits = 3)    #put it in a nice table, round to 3 decimal places.
+```
+
+## Be in control of factors
+(looking at dataset, "borough" var is a character var, and very often it gets converted to a factor var, i.e. it gets ordered in alphabetical order. That's why bronx, 1st in order, got to be reference borough by default!)
+So, to change reference group (let's say picking one with highest frequency)...
+
+```{r}
+nyc_airbnb =                 #overriding dataset
+  nyc_airbnb %>% 
+  mutate(
+    borough = fct_infreq(borough), #mutate borough to factor in order of frequency(most obs).
+    room_type = fct_infreq(room_type)  #do same with room_type
+  )
+```
+
+Look at plot again (with vars as factors vs characters, and ordered per choice)
+
+```{r}
+nyc_airbnb %>% 
+  ggplot(aes(x = stars, y = price, color = borough)) +
+  geom_point()
+# now ordered in terms of obs, Manhattan has most obs, followed by Brooklyn, etc.
+```
+
+Look at tht linear model again
+
+```{r}
+fit = lm(price ~ stars + borough, data = nyc_airbnb) 
+
+broom::tidy(fit)  #similar result as in line 59, reference category changed though to manhattan (one with most obs)
+```
+
+## Diagnostics
+
+
+
+
+
+
+
