@@ -170,9 +170,76 @@ fit_alt = lm(price ~ stars + borough, data = nyc_airbnb)  # alternative model
 
 anova(fit_null, fit_alt) %>%  #use anova to compare models
   broom::tidy()        # tidy the output 
-
-
 ```
 
 
+# Nest data, fit models
+
+Using interaction terms, this is pretty formal and complex
+```{r}
+fit = lm(price ~ stars * borough + room_type * borough, data = nyc_airbnb)
+
+broom::tidy(fit)
+```
+
+This is more exploratory but easier to understand (nesting).
+
+```{r}
+nyc_airbnb %>% 
+  nest(data = -borough) %>%    #nest everything except borough.
+#will give data organized(into a table) by borough.
+#Now we can fit a model to each dataset, for each borough.
+mutate(
+  models = map(.x = data, ~lm(price ~stars, data = .x)),  #iterating across .x (data)
+
+#mutate adds a column of "models" with lm outcomes as a list-object.  
+# %>% pull(models)  : use this to see "models" column. There will be 4 lm fits, one for each borough.
+  results = map(models, broom::tidy)   #get "results" column by mapping across "models", and mapping into broom-tidy. Gives better output (vs as a list). Broom tidy will tidy each lm list, and will store it in another list column called "results".
+) %>% 
+# %>% pull(results)   #to view results column
+  
+  select(-data, -models) %>% #get rid of these columns, not needed anymore.
+  unnest(results) %>%   #perfect output! each borough with its intercept & stars.
+  filter(term == "stars")   #don't need intercept, so filter out "stars"
+```
+
+Adding room-type to above model.
+
+```{r}
+nyc_airbnb %>% 
+  nest(data = -borough) %>%    
+mutate(
+  models = map(.x = data, ~lm(price ~stars + room_type, data = .x)),  
+  results = map(models, broom::tidy)  
+) %>% 
+  select(-data, -models) %>% 
+  unnest(results) %>%   
+  filter(term != "(Intercept)") %>% 
+  select(borough, term, estimate) %>%   #select these columns only.
+  pivot_wider(                          # easier to read untidy version.
+    names_from = borough,
+    values_from = estimate
+  )
+```
+
+
+Let's nest even more...
+(trying to fit a bunch of lm in every single neighborhood in manhattan)
+
+```{r}
+nyc_airbnb %>% 
+  filter(borough == "Manhattan") %>% 
+  nest(data = -neighborhood) %>%   #nest everything except neighborhood. Will give df for price, stars, room-type for each neighborhood.
+  mutate(
+  models = map(.x = data, ~lm(price ~stars + room_type, data = .x)),  #will give separate model for each of the 32 neighborhoods.
+  results = map(models, broom::tidy)  
+) %>% 
+  select(-data, -models) %>% 
+  unnest(results) %>% 
+  filter(str_detect(term, "room_type")) %>%  #interested in coefficient for room-type only. So detect string "room_type" in column "term". Output is "room_type..." only in this column.
+  ggplot(aes(x = neighborhood, y = estimate)) + #interested in estimates
+  geom_point() +
+  facet_wrap(. ~term) + #facet by term, need to fix x-axis labels, so...
+  theme(axis.text.x = element_text(angle = 70, vjust = 0.5, hjust = 1))
+```
 
