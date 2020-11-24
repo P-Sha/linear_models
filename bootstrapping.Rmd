@@ -1,0 +1,110 @@
+---
+title: "Bootstrapping"
+output: github_document
+    
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(modelr)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+
+set.seed(1)
+```
+
+## Simulate data
+
+```{r}
+n_samp = 250
+
+sim_df_const =                      #1st df
+  tibble(
+    x = rnorm(n_samp, 1, 1),
+    error = rnorm(n_samp, 0, 1),   #errors calculated from normal distr, will constant variance
+    y = 2 + 3 * x + error
+  )
+
+sim_df_nonconst = sim_df_const %>%   #2nd df, with new error structure
+  mutate(
+  error = error * .75 * x,
+  y = 2 + 3 * x + error
+)
+```
+
+Plot the datasets
+
+```{r}
+#1st dataset (matches all simple linear regresssion assumptions,i.e constant var)
+sim_df_const %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_smooth(method = lm)  #also graphing geom_smooth with lm method
+
+#2nd dataset (has varying residuals, because of the formula)
+sim_df_nonconst %>% 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_smooth(method = lm) #since linear model assumptions don't match, lm not a goodfit
+
+# looking at both graphs side by side:
+sim_df = 
+  bind_rows(const = sim_df_const, nonconst = sim_df_nonconst, .id = "data_source") 
+
+sim_df %>% 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point(alpha = .5) +
+  stat_smooth(method = "lm") +
+  facet_grid(~data_source) 
+```
+
+fit lm to models to get estimates
+
+```{r}
+lm(y ~ x, data = sim_df_const) %>% broom::tidy()
+lm(y ~ x, data = sim_df_nonconst) %>% broom::tidy()
+# similar outputs for estimates (intercept, slope n std error), but since 2nd model has greater variance at some parts and less at some(in the 1st half of graph) Confidence Intervals will be inaccurate.
+# Solution = Bootstrapping (getting estimates from multiple samples will give more accurate CIs)
+```
+
+## Draw one bootstrap sample (using the function to generate it)
+
+```{r}
+boot_sample = function(df) {           #bootstrap sample based on a df.
+  sample_frac(df, replace = TRUE)  %>%    # sample_frac function draws a sample of a particular proportion of a dataset, with replacement! 
+    arrange(x)     #arrange dataset by x-value.
+}
+```
+
+Check if the function works
+
+```{r}
+#passing the sim_df_nonconst df into the "bootstrap" function, it draws a sample with replacement of exactly the same size. Running this each time will give a different bootstrap sample.
+boot_sample(sim_df_nonconst) %>% 
+#plotting it, some points will be darker because they are repeated in the sample(since with replacement) 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point(alpha = .3) +
+  stat_smooth(method = "lm")
+```
+
+running a linear regression on bootstrap sample (running it each time will give different sample and therefore different regression and estimates)
+```{r}
+boot_sample(sim_df_nonconst) %>% 
+  lm(y ~ x, data = .) %>% 
+  broom::tidy()
+```
+
