@@ -120,4 +120,109 @@ rmse(wiggly_mod, test_df)
 # root mean squared error (rmse) lowest  for smooth model => best fit.
 ```
 
+## Cross validation using modlr package
+
+```{r}
+cv_df =          # creating a cross-validation df
+  crossv_mc(nonlin_df, 100)   # cross-validation on "non_linear" df, 100 runs = drawing samples from a dataset in a repeated way.
+
+cv_df
+```
+
+What is happening here...
+
+```{r}
+cv_df %>% pull(train) %>% .[[1]] %>% as_tibble() #looking at 1st list object in "train" column
+cv_df %>% pull(test) %>% .[[1]] %>% as_tibble() #similarly can look at testing dataset.
+```
+
+converting all datasets of cv_df stored as lists into tibbles.
+
+```{r}
+cv_df =
+  cv_df %>% 
+  mutate(
+    train = map(train, as_tibble),  #convert everything in train datasets as tibble.
+    test = map(test, as_tibble) #map across testing datasets and convert to tibble too.
+  # necessary conversion to use models functions.
+  )
+cv_df                
+```
+
+Let's try to fit models and get RMSEs for them.
+
+```{r}
+cv_df %>%    # will try to fit linear model to every element in train column.
+  mutate(
+    linear_mod = map(.x = train, ~lm(y ~ x, data = .x)), #fit lm to every element of train-column, i.e. data for lm is ".x" = which is a placeholder for "train" objects. 
+ 
+# output = a list column w/linear models, 100 of them
+
+# doing the same with smooth_model & wiggly model:
+  smooth_mod = map(.x = train, ~gam(y ~ s(x), data = .x)),
+  wiggle_mod = map(.x = train, ~gam(y ~s(x, k = 30), sp = 10e-6, data = .x))
+  ) %>% 
+  mutate(            #checking rmse's:
+    rmse_linear = map2(.x = linear_mod, .y = test, ~rmse(model = .x, data = .y)) #since 2 inputs needed(model-type and data column="test"), need map2
+  )    # = output will be a column of lists that have a single value for rmse in each.
+
+# instead, to get a column with just rmse values replace line 165/166 with:
+#   mutate(            
+#    rmse_linear = map2_dbl(.x = linear_mod, .y = test, ~rmse(model = .x, data = .y))
+
+#map2_dbl = will store just the values in a column, vs in a list first then in a column.
+```
+
+Repeating above process with smooth & wiggly models also:
+
+```{r}
+cv_df = 
+cv_df %>%    
+  mutate(
+    linear_mod = map(.x = train, ~lm(y ~ x, data = .x)), 
+    smooth_mod = map(.x = train, ~gam(y ~ s(x), data = .x)),
+    wiggly_mod = map(.x = train, ~gam(y ~s(x, k = 30), sp = 10e-6, data = .x))
+  ) %>% 
+  mutate(           
+    rmse_linear = map2_dbl(.x = linear_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_smooth = map2_dbl(.x = smooth_mod, .y = test, ~rmse(model = .x, data = .y)),
+    rmse_wiggly = map2_dbl(.x = wiggly_mod, .y = test, ~rmse(model = .x, data = .y))
+  )
+
+cv_df   
+```
+
+What do these results say about the model choices?
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>%    #select rmse columns only, not tidy output, so:
+  pivot_longer(
+    everything(),   #pivoting all of the columns.
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"   #get rid of prefixes
+  ) %>%         # now wee will plot results
+  ggplot(aes(x = model, y = rmse)) +
+  geom_violin()      #result = smooth model has the lowest rmse
+```
+
+Compute averages
+
+```{r}
+cv_df %>% 
+  select(starts_with("rmse")) %>%    #select rmse columns only, not tidy output, so:
+  pivot_longer(
+    everything(),   #pivoting all of the columns.
+    names_to = "model",
+    values_to = "rmse",
+    names_prefix = "rmse_"   #get rid of prefixes
+  ) %>% 
+  group_by(model) %>% 
+  summarize(avg_rmse = mean(rmse))
+
+```
+
+
+
 
